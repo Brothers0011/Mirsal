@@ -21,7 +21,10 @@ let config = {
 };
 
 if (fs.existsSync(CONFIG_FILE)) {
-    try { config = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8')); } catch (e) { }
+    try {
+        const loaded = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
+        config = { ...config, ...loaded, settings: { ...config.settings, ...loaded.settings } };
+    } catch (e) { }
 }
 function saveConfig() { fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2)); }
 
@@ -94,13 +97,13 @@ async function startApp() {
             else if (cat === 'w_both' && config.welcomeBoth) r = 'يا هلا والله، منور يا غالي.';
             else if (cat === 'eid' && config.eidMode) {
                 if (config.settings.eidReplyType === 'image') {
-                    const files = fs.readdirSync(EID_FOLDER).filter(f => /\.(jpg|jpeg|png|gif)$/i.test(f));
+                    const files = fs.readdirSync(EID_FOLDER).filter(f => /\.(jpg|jpeg|png|gif|webp)$/i.test(f));
                     if (files.length > 0) {
                         const randomImg = files[Math.floor(Math.random() * files.length)];
                         r = MessageMedia.fromFilePath(path.join(EID_FOLDER, randomImg));
                         isImageReply = true;
                     } else {
-                        r = "وأنتم بخير وصحة وعافية.";
+                        r = "وأنتم بخير وصحة وعافية، تقبل الله منا ومنكم.";
                     }
                 } else {
                     r = "وأنتم بخير وصحة وعافية، تقبل الله منا ومنكم.";
@@ -114,7 +117,9 @@ async function startApp() {
 
             if (r) {
                 const chat = await m.getChat();
-                await chat.sendStateTyping();
+                if (!isImageReply) {
+                    await chat.sendStateTyping();
+                }
                 await client.sendMessage(m.from, r, config.settings.replyMode ? { quotedMessageId: m.id._serialized } : {});
             }
         } catch (err) { }
