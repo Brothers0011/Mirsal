@@ -1,86 +1,103 @@
-# Mirsal AI - WhatsApp Auto-Responder 🤖
+<div align="center">
 
-![License](https://img.shields.io/badge/License-Custom_Non--Commercial-blue.svg)
-![Node.js](https://img.shields.io/badge/Node.js-18.x-green.svg)
+# 🤖 Mirsal AI - WhatsApp Auto-Responder
 
-Mirsal is an intelligent, automated WhatsApp response agent built with Node.js and powered by AI via the OpenRouter API (using `google/gemini-pro` / `gemini-2.5-flash-lite`). The system automatically categorizes incoming messages and replies with relevant context-aware responses, including Islamic greetings (Salam), daily greetings, and holiday wishes (Eid).
+[![License](https://img.shields.io/badge/License-Custom_Non--Commercial-blue.svg?style=for-the-badge)](LICENSE)
+[![Node.js](https://img.shields.io/badge/Node.js-18.x-green.svg?style=for-the-badge)](https://nodejs.org)
+[![OpenRouter API](https://img.shields.io/badge/AI-OpenRouter-orange.svg?style=for-the-badge)](https://openrouter.ai/)
+[![WhatsApp Web JS](https://img.shields.io/badge/WhatsApp-wwebjs-25D366?style=for-the-badge&logo=whatsapp&logoColor=white)](https://wwebjs.dev/)
 
-## 🌟 Features
+Mirsal is an intelligent, automated WhatsApp response agent built with **Node.js** and powered by cutting-edge AI via the **OpenRouter API** (`google/gemini-2.5-flash-lite` / `gemini-pro`). By deeply understanding context, the system autonomously categorizes incoming messages and replies with highly tailored responses. Whether it's an Islamic greeting, a time-specific social interaction, or festive holiday wishes, Mirsal ensures your chats are handled gracefully.
 
-- **AI-Powered Categorization:** Intelligently classifies messages into specific greeting categories or skips them if irrelevant using external AI models.
-- **Interactive CLI Dashboard:** Control panel built with `inquirer` to toggle various modes in real-time.
-- **Dynamic Reply Modes:**
-  - `Salam Mode`: Responds to Islamic greetings.
-  - `Welcome Day / Night / Both`: Responds contextually to daily social greetings.
-  - `Eid Mode`: Sends text or image-based replies for holidays.
-- **Presence Management:** Configurable "Always Online" mode.
+</div>
 
-## ⚠️ License and Commercial Use Restriction
+---
 
-This project is **Open Source for non-commercial use only**.
-You are permitted to use, copy, modify, and distribute this software for personal and educational purposes. **Any commercial use is strictly prohibited** without prior written permission from the owner. For complete terms and detailed information, please read the [LICENSE](LICENSE) file.
+## ✨ Features
+
+- 🧠 **AI-Powered Categorization**: Leverages external Intelligence (Gemini via OpenRouter) to contextually classify and respond to messages, while smartly ignoring irrelevant chatter.
+- 🎛️ **Interactive CLI Dashboard**: An intuitive control panel powered by `inquirer` allowing you to toggle modes dynamically and seamlessly in real-time.
+- 🎯 **Dynamic Reply Modes**:
+  - 🕌 **Salam Mode**: Gracefully acknowledges and responds to Islamic greetings.
+  - 🌅 **Welcome Day / 🌃 Night / 🌗 Both**: Reacts contextually to everyday social greetings based on your preferences.
+  - 🎉 **Eid Mode**: Instantly spreads festivity through customizable text or elegant image-based replies.
+- 🟢 **Presence Management**: Integrated "Always Online" mode to keep your digital availability robust.
+
+## ⚠️ License & Commercial Use Restriction
+
+This project is proudly **Open Source for non-commercial use only**.
+
+> You are welcome to use, study, copy, modify, and distribute this software for personal and educational purposes.  
+> **Commercial utilization is strictly prohibited** without obtaining prior written permission from the owner. For exhaustive terms and details, kindly review the [LICENSE](LICENSE) file.
 
 ## 🛠️ Prerequisites
 
-Before you begin, ensure you have the following installed on your machine:
+Before venturing forth, please secure the following prerequisites:
 
-- **[Node.js](https://nodejs.org/)** (v16.x or higher is recommended)
-- **`npm`** (Node Package Manager - comes with Node.js)
-- A valid **OpenRouter API Key** for the AI model to function.
-- A secondary WhatsApp account (or your main one) to scan the authentication QR code.
+- 🟢 **[Node.js](https://nodejs.org/)** (v16.x or strictly higher)
+- 📦 **`npm`** (Node Package Manager - bundled with Node.js)
+- 🔑 A valid **OpenRouter API Key** to breathe analytical life into the bot.
+- 📱 A secondary WhatsApp account (or your primary one) ready to scan the authentication QR code.
 
-## 📦 Installation & Setup
+## 🚀 Installation & Setup
 
-1. **Clone the repository or extract the project files:**
-   Open your terminal and navigate to the project's root directory.
+1. **Clone & Navigate**
+   Extract or clone the project and traverse into the root directory utilizing your terminal.
 
-2. **Install the required libraries:**
+2. **Install Dependencies**
    ```bash
    npm install
    ```
-   *This command will install necessary dependencies defined in `package.json`, including `whatsapp-web.js`, `axios`, `inquirer`, and `qrcode-terminal`.*
+   *This operation instantiates necessary dependencies precisely outlined in `package.json` (such as `whatsapp-web.js`, `axios`, `inquirer`, and `qrcode-terminal`).*
 
-3. **Initialize the Eid Images folder:**
-   The project will automatically create an `eid_images` folder on its first run if it doesn't exist. You can populate this folder with `.jpg`, `.jpeg`, `.png`, or `.gif` images that the bot will use when replying in `Eid Mode` (provided the image reply type is selected).
+3. **Initialize the Eid Media Directory**
+   Upon initial execution, an `eid_images` folder will organically emerge if absent. Populate this directory with artistic `.jpg`, `.jpeg`, `.png`, or `.gif` imagery that the bot will broadcast when configured to image-based **Eid Mode**.
 
-## 🚀 Running the Project
+## 🎮 Running the Application
 
-1. **Start the application:**
+1. **Ignite the Engine:**
    ```bash
    node index.js
    ```
 
-2. **Initial Configuration:**
-   - On the very first run, you will be prompted to enter your **API Key** (which will be stored securely in the `config.json` file).
-   - A QR Code will then be generated in the terminal.
+2. **First-Time Configuration:**
+   - You will be courteously prompted to supply your **API Key** (confidentially safeguarded within `config.json`).
+   - Subsequently, a vivid QR Code materializes in your terminal.
 
-3. **Link Your WhatsApp:**
-   - Open WhatsApp on your phone.
-   - Go to **Linked Devices** -> **Link a Device**.
-   - Scan the QR code displayed in your terminal.
+3. **Device Linkage:**
+   - Launch WhatsApp on your mobile device.
+   - Proceed to **Linked Devices** -> **Link a Device**.
+   - Scan the terminal's QR code.
 
-4. **Control Panel:**
-   Once successfully authenticated, you will see a Command Line Interface (CLI) menu where you can enable or disable different response modes dynamically.
-
-```text
-  ◈── CONTROL PANEL ──◈
-  Salam:🟢 | Day:🔴 | Night:🔴 | Both:🔴 | Eid:🟢
-```
+4. **Command CLI Panel:**
+   Once authenticated, command the bot seamlessly via the dynamic real-time dashboard:
+   ```text
+     ◈── CONTROL PANEL ──◈
+     Salam:🟢 | Day:🔴 | Night:🔴 | Both:🔴 | Eid:🟢
+   ```
 
 ## ⚙️ Configuration (`config.json`)
 
-The bot generates and manages a `config.json` file inside the root directory to store your preferences, such as:
-- API credentials
-- Active modules toggles (`salamMode`, `welcomeDay`, `welcomeNight`, `eidMode`)
-- Detailed bot behavior settings (`alwaysOnline`, `replyMode`, `eidReplyType`: Image vs. Text)
+Mirsal automatically maintains a resilient `config.json` preferences matrix at its root structure. This includes:
+- **API Credentials**
+- **Active Module States** (`salamMode`, `welcomeDay`, `welcomeNight`, `eidMode`)
+- **Behavior Settings** (`alwaysOnline`, `replyMode`, `eidReplyType`: Image/Text)
 
 ## 🏗️ Technical Stack
 
-- **[whatsapp-web.js](https://wwebjs.dev/)**: Core library for WhatsApp Web API interaction via Puppeteer.
-- **[axios](https://axios-http.com/)**: Handles HTTP requests to the OpenRouter/Gemini API for intent classification.
-- **[qrcode-terminal](https://www.npmjs.com/package/qrcode-terminal)**: Renders the authentication QR code directly in the Command Line Interface.
-- **[inquirer](https://www.npmjs.com/package/inquirer)**: Powers the interactive, stateful terminal dashboard.
+- **[whatsapp-web.js](https://wwebjs.dev/)**: The heartbeat for WhatsApp Web API interaction via robust Puppeteer instances.
+- **[axios](https://axios-http.com/)**: Seamless, promise-based HTTP requests funneling to OpenRouter.
+- **[qrcode-terminal](https://www.npmjs.com/package/qrcode-terminal)**: Renders the vital authentication QR code directly within standard terminal bounds.
+- **[inquirer](https://www.npmjs.com/package/inquirer)**: Powers up the interactive, stateful terminal dashboard arrays.
 
 ---
 
-**Disclaimer:** This tool is not affiliated with, authorized, maintained, sponsored, or endorsed by WhatsApp or any of its affiliates or subsidiaries. This is an independent and unofficial software.
+> **Disclaimer:** This tool is not affiliated with, authorized, maintained, sponsored, or endorsed by WhatsApp or any of its affiliates or subsidiaries. This is an independent and unofficial software.
+
+<br>
+
+<div align="center">
+
+Made with love by its developers ❤️
+
+</div>
