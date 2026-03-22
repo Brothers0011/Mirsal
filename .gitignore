@@ -1,0 +1,11 @@
+# الحماية والخصوصية
+.wwebjs_auth/
+.wwebjs_cache/
+config.json
+
+# مكتبات التشغيل (حجمها كبير ولا تُرفع)
+node_modules/
+
+# ملفات النظام واللوج
+npm-debug.log*
+.DS_Store
