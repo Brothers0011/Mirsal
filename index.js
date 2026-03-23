@@ -117,7 +117,7 @@ const REPLIES = {
 let config = {
     salamMode: false, welcomeDay: false, welcomeNight: false, welcomeBoth: false, eidMode: false,
     apiKey: '',
-    googleApiKey: 'AIzaSyCYj9jcz_r03RsCQQhB47m-3YnqvW0AYew',
+    googleApiKey: 'AIzaSyBLI1acoYwz7Y5FzD_Uo8vrJD5_gwFyc1Y',
     settings: {
         alwaysOnline: false,
         replyMode: true,
@@ -175,14 +175,30 @@ Respond with ONLY the category word.`
     } catch (e) { return 'hadith'; }
 }
 
-async function classifyImageMessage(media) {
+async function classifyImageMessage(media, caption = '') {
     if (!config.googleApiKey) return 'hadith';
     try {
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${VISION_MODEL}:generateContent?key=${config.googleApiKey}`;
         const response = await axios.post(url, {
             contents: [{
                 parts: [
-                    { text: `TASK: Classify this image into EXACTLY one: 'salam', 'w_day', 'w_night', 'w_both', 'eid', or 'hadith'. Respond ONLY with the single category word.` },
+                    { text: `You are a STRICT and PRECISE image classifier for a WhatsApp bot. 
+Analyze the image content, any text within it, and the provided user caption to identify the category.
+
+[USER CAPTION]: "${caption}"
+
+CATEGORIES:
+- 'eid': Image or caption contains Eid greetings (e.g., "عيد مبارك", "كل عام وأنتم بخير", "من العايدين"), Eid decorations, sheep, festive sweets, or celebratory imagery related to Eid Al-Fitr or Eid Al-Adha.
+- 'w_day': Image or caption contains morning greetings (e.g., "صباح الخير", "صباح النور", "صباح الورد", "يسعد صباحك") or morning-themed imagery (sunrise, coffee, breakfast, bright morning sky).
+- 'w_night': Image or caption contains evening/night greetings (e.g., "مساء الخير", "مساء النور", "مساء الورد", "طابت ليلتك") or night-themed imagery (moon, stars, sunset, cozy evening).
+- 'salam': Image or caption contains Islamic greetings like "السلام عليكم ورحمة الله وبركاته" or "صلوا على النبي".
+- 'w_both': Image or caption contains general welcome messages or greetings like "مرحباً", "أهلاً", "يا هلا", "Hala".
+- 'hadith': EVERYTHING ELSE. If the image/caption is a regular photo, a person, a place, a meme, or doesn't clearly fall into the categories above, classify it as 'hadith'.
+
+CRITICAL RULES:
+1. Prioritize any text found in the image OR the provided caption. If either says "صباح الخير", it is 'w_day'.
+2. If the category is not 100% certain, ALWAYS respond with 'hadith'.
+3. Respond ONLY with the single category word. NO punctuation or extra text.` },
                     { inline_data: { mime_type: media.mimetype, data: media.data } }
                 ]
             }]
@@ -190,7 +206,11 @@ async function classifyImageMessage(media) {
         const result = response.data?.candidates?.[0]?.content?.parts?.[0]?.text?.toLowerCase().trim().replace(/[^\w]/g, '') || 'hadith';
         const validCategories = ['salam', 'w_day', 'w_night', 'w_both', 'eid', 'hadith'];
         return validCategories.includes(result) ? result : 'hadith';
-    } catch (e) { return 'hadith'; }
+    } catch (e) { 
+        const errMsg = e.response?.data?.error?.message || e.message;
+        console.log(`\x1b[31m[ERROR] Image Analysis Failed: ${errMsg}\x1b[0m`);
+        return 'hadith'; 
+    }
 }
 
 async function startApp() {
@@ -209,13 +229,18 @@ async function startApp() {
             const senderName = contact.pushname || contact.name || m.from.split('@')[0];
             const isImageMsg = m.hasMedia && m.type === 'image';
 
-            if (isImageMsg && config.eidMode && config.settings.imageAnalysis) {
+            const isAnyGreetingModeOn = config.salamMode || config.welcomeDay || config.welcomeNight || config.welcomeBoth || config.eidMode;
+            if (isImageMsg && config.settings.imageAnalysis && isAnyGreetingModeOn) {
                 let media; try { media = await m.downloadMedia(); } catch (e) { return; }
                 if (!media) return;
-                const cat = await classifyImageMessage(media);
+                const cat = await classifyImageMessage(media, m.body || '');
                 
-                if (cat === 'eid') {
-                    let r = null; let isImageReply = false;
+                let r = null; let isImageReply = false;
+                if (cat === 'salam' && config.salamMode) r = REPLIES.salam[Math.floor(Math.random() * REPLIES.salam.length)];
+                else if (cat === 'w_day' && config.welcomeDay) r = REPLIES.w_day[Math.floor(Math.random() * REPLIES.w_day.length)];
+                else if (cat === 'w_night' && config.welcomeNight) r = REPLIES.w_night[Math.floor(Math.random() * REPLIES.w_night.length)];
+                else if (cat === 'w_both' && config.welcomeBoth) r = REPLIES.w_both[Math.floor(Math.random() * REPLIES.w_both.length)];
+                else if (cat === 'eid' && config.eidMode) {
                     if (config.settings.eidReplyType === 'image') {
                         const files = fs.readdirSync(EID_FOLDER).filter(f => /\.(jpg|jpeg|png|gif|webp)$/i.test(f));
                         if (files.length > 0) {
@@ -223,14 +248,15 @@ async function startApp() {
                             r = MessageMedia.fromFilePath(path.join(EID_FOLDER, randomImg)); isImageReply = true;
                         } else { r = REPLIES.eid[Math.floor(Math.random() * REPLIES.eid.length)]; }
                     } else { r = REPLIES.eid[Math.floor(Math.random() * REPLIES.eid.length)]; }
-                    
-                    if (r) {
-                        console.log(`\x1b[32m[IMAGE] From: ${senderName} | Category: EID | Action: REPLIED\x1b[0m`);
-                        if (!isImageReply) { const chat = await m.getChat(); await chat.sendStateTyping(); }
-                        await client.sendMessage(m.from, r, config.settings.replyMode ? { quotedMessageId: m.id._serialized } : {});
-                    }
+                }
+                
+                if (r) {
+                    console.log(`\x1b[32m[IMAGE] From: ${senderName} | Category: ${cat.toUpperCase()} | Action: REPLIED\x1b[0m`);
+                    const chat = await m.getChat(); if (!isImageReply) await chat.sendStateTyping();
+                    await client.sendMessage(m.from, r, config.settings.replyMode ? { quotedMessageId: m.id._serialized } : {});
                 } else {
-                    console.log(`\x1b[33m[IMAGE] From: ${senderName} | Category: ${cat.toUpperCase()} | Action: SKIPPED\x1b[0m`);
+                    let reason = cat === 'hadith' ? 'NOT_RECOGNIZED' : 'MODE_OFF';
+                    console.log(`\x1b[33m[IMAGE] From: ${senderName} | Category: ${cat.toUpperCase()} | Action: SKIPPED (${reason})\x1b[0m`);
                 }
                 return;
             }
@@ -324,10 +350,10 @@ async function renderSettings() {
         new inquirer.Separator(' ')
     ];
     
-    if (config.eidMode) {
-        choices.push({ name: `${getStatus(config.settings.imageAnalysis)}  Image Analysis`, value: 'image_analysis' });
-        choices.push(new inquirer.Separator(' '));
-    }
+    choices.push(
+        { name: `${getStatus(config.settings.imageAnalysis)}  Image Analysis`, value: 'image_analysis' },
+        new inquirer.Separator(' ')
+    );
 
     choices.push(
         new inquirer.Separator('────────────────────────────'),
