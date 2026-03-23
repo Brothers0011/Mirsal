@@ -5,9 +5,10 @@
 [![License](https://img.shields.io/badge/License-Custom_Non--Commercial-blue.svg?style=for-the-badge)](LICENSE)
 [![Node.js](https://img.shields.io/badge/Node.js-18.x-green.svg?style=for-the-badge)](https://nodejs.org)
 [![OpenRouter API](https://img.shields.io/badge/AI-OpenRouter-orange.svg?style=for-the-badge)](https://openrouter.ai/)
+[![Google Gemini](https://img.shields.io/badge/Vision-Google_Gemini-4285F4?style=for-the-badge&logo=google-gemini&logoColor=white)](https://aistudio.google.com/)
 [![WhatsApp Web JS](https://img.shields.io/badge/WhatsApp-wwebjs-25D366?style=for-the-badge&logo=whatsapp&logoColor=white)](https://wwebjs.dev/)
 
-Mirsal is an intelligent, automated WhatsApp response agent built with **Node.js** and powered by cutting-edge AI via the **OpenRouter API** (`google/gemini-2.5-flash-lite` / `gemini-pro`). By deeply understanding context, the system autonomously categorizes incoming messages and replies with highly tailored responses. Whether it's an Islamic greeting, a time-specific social interaction, or festive holiday wishes, Mirsal ensures your chats are handled gracefully.
+Mirsal is an intelligent, automated WhatsApp response agent built with **Node.js** and powered by cutting-edge AI via **OpenRouter** and **Google AI Studio**. By deeply understanding context, the system autonomously categorizes incoming text, images, and stickers to provide highly tailored responses. Whether it's an Islamic greeting, a morning wish, or a festive Eid sticker, Mirsal ensures your chats are handled with human-like precision.
 
 </div>
 
@@ -15,84 +16,72 @@ Mirsal is an intelligent, automated WhatsApp response agent built with **Node.js
 
 ## ✨ Features
 
-- 🧠 **AI-Powered Categorization**: Leverages external Intelligence (Gemini via OpenRouter) to contextually classify and respond to messages, while smartly ignoring irrelevant chatter.
-- 🎛️ **Interactive CLI Dashboard**: An intuitive control panel powered by `inquirer` allowing you to toggle modes dynamically and seamlessly in real-time.
-- 🎯 **Dynamic Reply Modes**:
-  - 🕌 **Salam Mode**: Gracefully acknowledges and responds to Islamic greetings.
-  - 🌅 **Welcome Day / 🌃 Night / 🌗 Both**: Reacts contextually to everyday social greetings based on your preferences.
-  - 🎉 **Eid Mode**: Instantly spreads festivity through customizable text or elegant image-based replies.
-- 🟢 **Presence Management**: Integrated "Always Online" mode to keep your digital availability robust.
+- 🧠 **Multimodal AI Analysis**: 
+  - **Text**: Contextual classification via `gemini-2.5-flash-lite`.
+  - **Images**: Visual understanding via `gemini-2.5-flash` to recognize greetings inside photos.
+  - **Stickers**: Automatic conversion and analysis of stickers to identify their intent.
+- 🎛️ **Interactive CLI Dashboard**: An intuitive, premium-styled control panel allowing you to toggle modes and settings in real-time.
+- 🎯 **Contextual Response Modes**:
+  - 🕌 **Salam Mode**: Responds to Islamic greetings with traditional replies.
+  - 🌅 **Social Greetings**: Specific handling for Morning (**Sabah**), Evening (**Masa**), and general welcomes.
+  - 🎉 **Eid Mode**: Spreads joy through customizable text or random image-based replies.
+- 🟢 **Always Online**: Keeps your WhatsApp status active and available.
+- 🛡️ **Smart Filtering**: Automatically ignores group chats, broadcast lists, and gibberish messages.
 
 ## ⚠️ License & Commercial Use Restriction
 
-This project is proudly **Open Source for non-commercial use only**.
+This project is **Open Source for non-commercial use only**.
 
 > You are welcome to use, study, copy, modify, and distribute this software for personal and educational purposes.  
-> **Commercial utilization is strictly prohibited** without obtaining prior written permission from the owner. For exhaustive terms and details, kindly review the [LICENSE](LICENSE) file.
+> **Commercial utilization is strictly prohibited** without obtaining prior written permission. See [LICENSE](LICENSE) for details.
 
 ## 🛠️ Prerequisites
 
-Before venturing forth, please secure the following prerequisites:
+To run Mirsal, you will need:
 
-- 🟢 **[Node.js](https://nodejs.org/)** (v16.x or strictly higher)
-- 📦 **`npm`** (Node Package Manager - bundled with Node.js)
-- 🔑 A valid **OpenRouter API Key** to breathe analytical life into the bot.
-- 📱 A secondary WhatsApp account (or your primary one) ready to scan the authentication QR code.
+- 🟢 **Node.js** (v18.x or higher)
+- 🔑 **OpenRouter API Key** (for text analysis)
+- 🔑 **Google Gemini API Key** (for image/sticker vision analysis)
+- 📱 A WhatsApp account to link via QR code.
 
 ## 🚀 Installation & Setup
 
-1. **Clone & Navigate**
-   Extract or clone the project and traverse into the root directory utilizing your terminal.
-
-2. **Install Dependencies**
+1. **Clone & Install**
    ```bash
    npm install
    ```
-   *This operation instantiates necessary dependencies precisely outlined in `package.json` (such as `whatsapp-web.js`, `axios`, `inquirer`, and `qrcode-terminal`).*
 
-3. **Initialize the Eid Media Directory**
-   Upon initial execution, an `eid_images` folder will organically emerge if absent. Populate this directory with artistic `.jpg`, `.jpeg`, `.png`, or `.gif` imagery that the bot will broadcast when configured to image-based **Eid Mode**.
+2. **Populate Media**
+   Place your Eid celebration images in the `eid_images` folder (created automatically on first run). These will be used for image-reply mode.
 
-## 🎮 Running the Application
-
-1. **Ignite the Engine:**
+3. **Launch**
    ```bash
    node index.js
    ```
 
-2. **First-Time Configuration:**
-   - You will be courteously prompted to supply your **API Key** (confidentially safeguarded within `config.json`).
-   - Subsequently, a vivid QR Code materializes in your terminal.
+4. **Configuration**
+   On the first run, the bot will ask for your API keys. They are securely saved in `config.json`.
 
-3. **Device Linkage:**
-   - Launch WhatsApp on your mobile device.
-   - Proceed to **Linked Devices** -> **Link a Device**.
-   - Scan the terminal's QR code.
+## 🎮 How it Works
 
-4. **Command CLI Panel:**
-   Once authenticated, command the bot seamlessly via the dynamic real-time dashboard:
-   ```text
-     ◈── CONTROL PANEL ──◈
-     Salam:🟢 | Day:🔴 | Night:🔴 | Both:🔴 | Eid:🟢
-   ```
+Mirsal doesn't just "reply"; it **analyzes**:
 
-## ⚙️ Configuration (`config.json`)
+1. **Message Arrives**: Could be text, an image, or a sticker.
+2. **Vision/Text Analysis**: If it's a visual message, it's processed by the **Gemini 2.5 Flash** vision model.
+3. **Classification**: The AI detects the intent (e.g., `eid`, `w_day`, `salam`).
+4. **Smart Reply**: Based on your active modes, Mirsal picks a random, culturally appropriate reply (Text or Image).
 
-Mirsal automatically maintains a resilient `config.json` preferences matrix at its root structure. This includes:
-- **API Credentials**
-- **Active Module States** (`salamMode`, `welcomeDay`, `welcomeNight`, `eidMode`)
-- **Behavior Settings** (`alwaysOnline`, `replyMode`, `eidReplyType`: Image/Text)
+## ⚙️ Settings (`config.json`)
 
-## 🏗️ Technical Stack
-
-- **[whatsapp-web.js](https://wwebjs.dev/)**: The heartbeat for WhatsApp Web API interaction via robust Puppeteer instances.
-- **[axios](https://axios-http.com/)**: Seamless, promise-based HTTP requests funneling to OpenRouter.
-- **[qrcode-terminal](https://www.npmjs.com/package/qrcode-terminal)**: Renders the vital authentication QR code directly within standard terminal bounds.
-- **[inquirer](https://www.npmjs.com/package/inquirer)**: Powers up the interactive, stateful terminal dashboard arrays.
+Configure your bot directly through the CLI or by editing `config.json`:
+- `imageAnalysis`: Toggle AI analysis for incoming photos.
+- `stickerAnalysis`: Toggle AI analysis for incoming stickers.
+- `eidReplyType`: Choose between `text` or `image` for Eid responses.
+- `alwaysOnline`: Persistence management.
 
 ---
 
-> **Disclaimer:** This tool is not affiliated with, authorized, maintained, sponsored, or endorsed by WhatsApp or any of its affiliates or subsidiaries. This is an independent and unofficial software.
+> **Disclaimer:** This tool is an independent and unofficial software. It is not affiliated with or endorsed by WhatsApp Inc.
 
 <br>
 
@@ -101,3 +90,4 @@ Mirsal automatically maintains a resilient `config.json` preferences matrix at i
 Made with love by its developers ❤️
 
 </div>
+
