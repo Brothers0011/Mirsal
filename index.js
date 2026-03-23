@@ -16,7 +16,8 @@ let config = {
     settings: {
         alwaysOnline: false,
         replyMode: true,
-        eidReplyType: 'text'
+        eidReplyType: 'text',
+        imageAnalysis: false
     }
 };
 
@@ -29,6 +30,7 @@ if (fs.existsSync(CONFIG_FILE)) {
 function saveConfig() { fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2)); }
 
 const AI_MODEL = "google/gemini-2.5-flash-lite";
+const VISION_MODEL = "meta-llama/llama-3.2-11b-vision-instruct";
 let lastMain = 'salam', lastSet = 'alwaysOnline', onlineInt = null, client;
 const getStatus = (v) => v ? '🟢' : '🔴';
 
@@ -68,6 +70,58 @@ async function classifyMessage(text) {
     } catch (e) { return 'hadith'; }
 }
 
+// دالة تحليل الصور عبر نموذج الرؤية
+async function classifyImageMessage(media) {
+    if (!config.apiKey) return 'hadith';
+    try {
+        const base64Data = media.data;
+        const mimeType = media.mimetype || 'image/jpeg';
+
+        const response = await axios.post('https://openrouter.ai/api/v1/chat/completions', {
+            model: VISION_MODEL,
+            messages: [{
+                role: "user",
+                content: [
+                    {
+                        type: "text",
+                        text: `Analyze this image and classify it into EXACTLY one word from these categories: 'salam', 'w_day', 'w_night', 'w_both', 'eid', or 'hadith'.
+                        
+                        RULES:
+                        1. 'salam': If the image contains Islamic greeting text like "السلام عليكم".
+                        2. 'w_day': If the image contains morning greeting (صباح الخير, Good Morning).
+                        3. 'w_night': If the image contains evening/night greeting (مساء الخير, Good Evening/Night).
+                        4. 'w_both': If the image contains a general day greeting (هلا, مرحبا) without time specifics.
+                        5. 'eid': If the image is an Eid greeting, holiday celebration, or contains text like (عيد مبارك, كل عام وأنتم بخير, Eid Mubarak).
+                        6. 'hadith': For everything else - regular photos, memes, nature, people, objects, etc.
+                        
+                        Respond ONLY with the single category word, nothing else.`
+                    },
+                    {
+                        type: "image_url",
+                        image_url: {
+                            url: `data:${mimeType};base64,${base64Data}`
+                        }
+                    }
+                ]
+            }],
+            max_tokens: 10,
+            temperature: 0
+        }, {
+            headers: {
+                'Authorization': `Bearer ${config.apiKey}`,
+                'Content-Type': 'application/json'
+            },
+            timeout: 15000
+        });
+
+        const result = response.data?.choices?.[0]?.message?.content?.toLowerCase().trim().replace(/[^\w]/g, '') || 'hadith';
+        const validCategories = ['salam', 'w_day', 'w_night', 'w_both', 'eid', 'hadith'];
+        return validCategories.includes(result) ? result : 'hadith';
+    } catch (e) {
+        return 'hadith';
+    }
+}
+
 async function startApp() {
     if (!config.apiKey) {
         console.clear();
@@ -84,9 +138,58 @@ async function startApp() {
     client.on('ready', () => { if (config.settings.alwaysOnline) manageOnline(true); renderMenu(); });
 
     client.on('message', async m => {
-        if (m.from.includes('@g.us') || m.from === 'status@broadcast' || !m.body) return;
+        if (m.from.includes('@g.us') || m.from === 'status@broadcast') return;
 
         try {
+            const hasMedia = m.hasMedia && ['image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(m.type === 'image' ? 'image/jpeg' : m._data?.mimetype);
+            const isImageMsg = m.hasMedia && m.type === 'image';
+
+            // تحليل الصور: فقط إذا كان eid mode مفعّل وimage analysis مفعّل
+            if (isImageMsg && config.eidMode && config.settings.imageAnalysis) {
+                let media;
+                try { media = await m.downloadMedia(); } catch (e) { return; }
+                if (!media) return;
+
+                const cat = await classifyImageMessage(media);
+                const sender = m.from.split('@')[0];
+
+                console.log(`\n\x1b[90m[${new Date().toLocaleTimeString()}]\x1b[0m \x1b[35m@${sender}\x1b[0m: \x1b[90m[Image Message]\x1b[0m`);
+                console.log(`\x1b[33m   └─ Vision AI: ${cat}\x1b[0m`);
+
+                if (cat === 'eid') {
+                    let r = null;
+                    let isImageReply = false;
+
+                    if (config.settings.eidReplyType === 'image') {
+                        const files = fs.readdirSync(EID_FOLDER).filter(f => /\.(jpg|jpeg|png|gif|webp)$/i.test(f));
+                        if (files.length > 0) {
+                            const randomImg = files[Math.floor(Math.random() * files.length)];
+                            r = MessageMedia.fromFilePath(path.join(EID_FOLDER, randomImg));
+                            isImageReply = true;
+                        } else {
+                            r = "وأنتم بخير وصحة وعافية، تقبل الله منا ومنكم.";
+                        }
+                    } else {
+                        r = "وأنتم بخير وصحة وعافية، تقبل الله منا ومنكم.";
+                    }
+
+                    const statusIcon = '✅';
+                    console.log(`\x1b[33m   └─ Status: ${statusIcon} ${isImageReply ? 'Replied Image' : 'Replied Text'}\x1b[0m`);
+
+                    if (!isImageReply) {
+                        const chat = await m.getChat();
+                        await chat.sendStateTyping();
+                    }
+                    await client.sendMessage(m.from, r, config.settings.replyMode ? { quotedMessageId: m.id._serialized } : {});
+                } else {
+                    console.log(`\x1b[33m   └─ Status: ⏭️ Skipped\x1b[0m`);
+                }
+                return;
+            }
+
+            // الرسائل النصية العادية
+            if (!m.body) return;
+
             const cat = await classifyMessage(m.body);
             let r = null;
             let isImageReply = false;
@@ -160,17 +263,30 @@ async function renderSettings() {
     console.clear();
     const eidTypeLabel = config.settings.eidReplyType === 'text' ? '📝 Text' : '🖼️ Image';
     const header = `\n  ◈── SETTINGS ──◈\n`;
-    const { a } = await ask(header + '  Adjust Preferences:', [
+
+    // بناء قائمة الإعدادات - يظهر Image Analysis فقط إذا كان Eid Mode مفعّلاً
+    const choices = [
         { name: `${getStatus(config.settings.alwaysOnline)} Always Online`, value: 'online' },
         { name: `${getStatus(config.settings.replyMode)} Reply Mode (Quote)`, value: 'reply' },
         { name: `🎉 Eid Reply Type: [ ${eidTypeLabel} ]`, value: 'eid_type' },
-        { name: '⬅️ Back', value: 'back' }
-    ], lastSet);
+    ];
+
+    if (config.eidMode) {
+        choices.push({
+            name: `${getStatus(config.settings.imageAnalysis)} Image Analysis  \x1b[90m(Vision AI للصور)\x1b[0m`,
+            value: 'image_analysis'
+        });
+    }
+
+    choices.push({ name: '⬅️ Back', value: 'back' });
+
+    const { a } = await ask(header + '  Adjust Preferences:', choices, lastSet);
 
     lastSet = a;
     if (a === 'online') { config.settings.alwaysOnline = !config.settings.alwaysOnline; manageOnline(config.settings.alwaysOnline); }
     else if (a === 'reply') config.settings.replyMode = !config.settings.replyMode;
     else if (a === 'eid_type') config.settings.eidReplyType = config.settings.eidReplyType === 'text' ? 'image' : 'text';
+    else if (a === 'image_analysis') config.settings.imageAnalysis = !config.settings.imageAnalysis;
     else if (a === 'back') return renderMenu();
 
     saveConfig(); renderSettings();
