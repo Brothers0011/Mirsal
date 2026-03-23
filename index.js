@@ -141,7 +141,7 @@ const getStatus = (v) => v ? '🟢' : '🔴';
 
 const ask = (m, c, d) => inquirer.prompt([{
     type: 'list', name: 'a', message: m, choices: c, default: d,
-    prefix: '', suffix: '', loop: false
+    prefix: '', suffix: '', loop: false, pageSize: 20
 }]);
 
 async function classifyMessage(text) {
@@ -151,7 +151,20 @@ async function classifyMessage(text) {
             model: AI_MODEL,
             messages: [{
                 role: "system",
-                content: `Classify the message into EXACTLY one word: 'salam', 'w_day', 'w_night', 'w_both', 'eid', or 'hadith'. Respond ONLY with the category word.`
+                content: `You are a STRICT and PRECISE text classifier. Your job is to identify greetings ONLY.
+- 'salam': Clear Islamic greetings (Assalamu Alaikum, Salam, etc.).
+- 'w_day': Specific morning greetings (Sabah Al Khair, etc.).
+- 'w_night': Specific night greetings (Masa Al Khair, etc.).
+- 'w_both': Clear general welcomes (Hala, Marhaba).
+- 'eid': Eid congratulations ONLY.
+- 'summary': Requests to summarize videos/links.
+- 'hadith': EVERYTHING ELSE.
+
+CRITICAL RULES:
+1. If the text is very short (1-3 characters) or gibberish like 'aa', 'ss', 'x', '...', ALWAYS classify as 'hadith'.
+2. If the text is just a typo, a single word that isn't a greeting, or ambiguous, ALWAYS classify as 'hadith'.
+3. Do NOT try to guess if the user meant a greeting. If it is not a 100% clear greeting, it is 'hadith'. 
+Respond with ONLY the category word.`
             }, { role: "user", content: text }],
             max_tokens: 5, temperature: 0
         }, {
@@ -192,11 +205,15 @@ async function startApp() {
     client.on('message', async m => {
         if (m.from.includes('@g.us') || m.from === 'status@broadcast') return;
         try {
+            const contact = await m.getContact();
+            const senderName = contact.pushname || contact.name || m.from.split('@')[0];
             const isImageMsg = m.hasMedia && m.type === 'image';
+
             if (isImageMsg && config.eidMode && config.settings.imageAnalysis) {
                 let media; try { media = await m.downloadMedia(); } catch (e) { return; }
                 if (!media) return;
                 const cat = await classifyImageMessage(media);
+                
                 if (cat === 'eid') {
                     let r = null; let isImageReply = false;
                     if (config.settings.eidReplyType === 'image') {
@@ -206,8 +223,14 @@ async function startApp() {
                             r = MessageMedia.fromFilePath(path.join(EID_FOLDER, randomImg)); isImageReply = true;
                         } else { r = REPLIES.eid[Math.floor(Math.random() * REPLIES.eid.length)]; }
                     } else { r = REPLIES.eid[Math.floor(Math.random() * REPLIES.eid.length)]; }
-                    if (!isImageReply) { const chat = await m.getChat(); await chat.sendStateTyping(); }
-                    await client.sendMessage(m.from, r, config.settings.replyMode ? { quotedMessageId: m.id._serialized } : {});
+                    
+                    if (r) {
+                        console.log(`\x1b[32m[IMAGE] From: ${senderName} | Category: EID | Action: REPLIED\x1b[0m`);
+                        if (!isImageReply) { const chat = await m.getChat(); await chat.sendStateTyping(); }
+                        await client.sendMessage(m.from, r, config.settings.replyMode ? { quotedMessageId: m.id._serialized } : {});
+                    }
+                } else {
+                    console.log(`\x1b[33m[IMAGE] From: ${senderName} | Category: ${cat.toUpperCase()} | Action: SKIPPED\x1b[0m`);
                 }
                 return;
             }
@@ -231,8 +254,11 @@ async function startApp() {
             }
 
             if (r) {
+                console.log(`\x1b[32m[TEXT]  From: ${senderName} | Msg: "${m.body.substring(0,25)}..." | Category: ${cat.toUpperCase()} | Action: REPLIED\x1b[0m`);
                 const chat = await m.getChat(); if (!isImageReply) await chat.sendStateTyping();
                 await client.sendMessage(m.from, r, config.settings.replyMode ? { quotedMessageId: m.id._serialized } : {});
+            } else {
+                console.log(`\x1b[33m[TEXT]  From: ${senderName} | Msg: "${m.body.substring(0,25)}..." | Category: ${cat.toUpperCase()} | Action: SKIPPED\x1b[0m`);
             }
         } catch (err) { }
     });
@@ -241,16 +267,32 @@ async function startApp() {
 
 async function renderMenu() {
     console.clear();
-    const statusLine = `Salam:${getStatus(config.salamMode)} | Day:${getStatus(config.welcomeDay)} | Night:${getStatus(config.welcomeNight)} | Both:${getStatus(config.welcomeBoth)} | Eid:${getStatus(config.eidMode)}`;
-    const header = `\x1b[1m\x1b[32m✅ CONNECTED | MIRSAL AI\x1b[0m\n\n  ◈── CONTROL PANEL ──◈\n  ${statusLine}\n`;
-    const { a } = await ask(header + '  Choose Action:', [
-        { name: `${getStatus(config.salamMode)} Salam Mode`, value: 'salam' },
-        { name: `${getStatus(config.welcomeDay)} Welcome Day`, value: 'w_day' },
-        { name: `${getStatus(config.welcomeNight)} Welcome Night`, value: 'w_night' },
-        { name: `${getStatus(config.welcomeBoth)} Welcome Both`, value: 'w_both' },
-        { name: `${getStatus(config.eidMode)} Eid Mode`, value: 'eid' },
-        { name: '⚙️ Settings', value: 'settings' },
-        { name: '🚪 Exit', value: 'exit' }
+    const statusLine = ` ┃  Salam: ${getStatus(config.salamMode)}  ┃  Day: ${getStatus(config.welcomeDay)}  ┃  Night: ${getStatus(config.welcomeNight)}  ┃  Both: ${getStatus(config.welcomeBoth)}  ┃  Eid: ${getStatus(config.eidMode)}  ┃`;
+    const header = `
+  \x1b[1m\x1b[32m╔════════════════════════════════════════════════════════════╗
+  ║                📦 CONNECTED | MIRSAL AI                    ║
+  ╚════════════════════════════════════════════════════════════╝\x1b[0m
+
+  \x1b[36m◈ SYSTEM STATUS ◈\x1b[0m
+  ${statusLine}
+
+  \x1b[33m◈ CONTROL PANEL ◈\x1b[0m`;
+    
+    const { a } = await ask(header, [
+        { name: `${getStatus(config.salamMode)}  Salam Mode`, value: 'salam' },
+        new inquirer.Separator(' '),
+        { name: `${getStatus(config.welcomeDay)}  Welcome Day`, value: 'w_day' },
+        new inquirer.Separator(' '),
+        { name: `${getStatus(config.welcomeNight)}  Welcome Night`, value: 'w_night' },
+        new inquirer.Separator(' '),
+        { name: `${getStatus(config.welcomeBoth)}  Welcome Both`, value: 'w_both' },
+        new inquirer.Separator(' '),
+        { name: `${getStatus(config.eidMode)}  Eid Mode`, value: 'eid' },
+        new inquirer.Separator('────────────────────────────'),
+        { name: '⚙️   Settings', value: 'settings' },
+        new inquirer.Separator(' '),
+        { name: '🚪  Exit', value: 'exit' },
+        new inquirer.Separator(' ')
     ], lastMain);
     lastMain = a;
     if (a === 'salam') config.salamMode = !config.salamMode;
@@ -265,16 +307,39 @@ async function renderMenu() {
 
 async function renderSettings() {
     console.clear();
-    const eidTypeLabel = config.settings.eidReplyType === 'text' ? '📝 Text' : '🖼️ Image';
-    const header = `\n  ◈── SETTINGS ──◈\n`;
+    const eidTypeLabel = config.settings.eidReplyType === 'text' ? '📝  Text' : '🖼️  Image';
+    const header = `
+  \x1b[1m\x1b[34m╔════════════════════════════════════════════════════════════╗
+  ║                ⚙️  SYSTEM SETTINGS                          ║
+  ╚════════════════════════════════════════════════════════════╝\x1b[0m
+
+  \x1b[33m◈ PREFERENCES ◈\x1b[0m`;
+
     const choices = [
-        { name: `${getStatus(config.settings.alwaysOnline)} Always Online`, value: 'online' },
-        { name: `${getStatus(config.settings.replyMode)} Reply Mode (Quote)`, value: 'reply' },
-        { name: `🎉 Eid Reply Type: [ ${eidTypeLabel} ]`, value: 'eid_type' },
+        { name: `${getStatus(config.settings.alwaysOnline)}  Always Online`, value: 'online' },
+        new inquirer.Separator(' '),
+        { name: `${getStatus(config.settings.replyMode)}  Reply Mode (Quote)`, value: 'reply' },
+        new inquirer.Separator(' '),
+        { name: `🎉  Eid Reply Type: [ ${eidTypeLabel} ]`, value: 'eid_type' },
+        new inquirer.Separator(' ')
     ];
-    if (config.eidMode) choices.push({ name: `${getStatus(config.settings.imageAnalysis)} Image Analysis`, value: 'image_analysis' });
-    choices.push({ name: '🔑 Update OpenRouter Key', value: 'key_or' }, { name: '🔑 Update Google API Key', value: 'key_google' }, { name: '⬅️ Back', value: 'back' });
-    const { a } = await ask(header + '  Adjust Preferences:', choices, lastSet);
+    
+    if (config.eidMode) {
+        choices.push({ name: `${getStatus(config.settings.imageAnalysis)}  Image Analysis`, value: 'image_analysis' });
+        choices.push(new inquirer.Separator(' '));
+    }
+
+    choices.push(
+        new inquirer.Separator('────────────────────────────'),
+        { name: '🔑  Update OpenRouter Key', value: 'key_or' },
+        new inquirer.Separator(' '),
+        { name: '🔑  Update Google API Key', value: 'key_google' },
+        new inquirer.Separator(' '),
+        { name: '⬅️   Back to Menu', value: 'back' },
+        new inquirer.Separator(' ')
+    );
+
+    const { a } = await ask(header, choices, lastSet);
     lastSet = a;
     if (a === 'online') { config.settings.alwaysOnline = !config.settings.alwaysOnline; manageOnline(config.settings.alwaysOnline); }
     else if (a === 'reply') config.settings.replyMode = !config.settings.replyMode;
