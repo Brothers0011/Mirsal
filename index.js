@@ -122,7 +122,8 @@ let config = {
         alwaysOnline: false,
         replyMode: true,
         eidReplyType: 'text',
-        imageAnalysis: false
+        imageAnalysis: false,
+        stickerAnalysis: false
     }
 };
 
@@ -227,15 +228,18 @@ async function startApp() {
         try {
             const contact = await m.getContact();
             const senderName = contact.pushname || contact.name || m.from.split('@')[0];
-            const isImageMsg = m.hasMedia && m.type === 'image';
-
+            const isImage = m.type === 'image';
+            const isSticker = m.type === 'sticker';
+            const isVisualSettingEnabled = (isImage && config.settings.imageAnalysis) || (isSticker && config.settings.stickerAnalysis);
+            
             const isAnyGreetingModeOn = config.salamMode || config.welcomeDay || config.welcomeNight || config.welcomeBoth || config.eidMode;
-            if (isImageMsg && config.settings.imageAnalysis && isAnyGreetingModeOn) {
+            if (m.hasMedia && isVisualSettingEnabled && isAnyGreetingModeOn) {
                 let media; try { media = await m.downloadMedia(); } catch (e) { return; }
                 if (!media) return;
                 const cat = await classifyImageMessage(media, m.body || '');
                 
                 let r = null; let isImageReply = false;
+                const msgTypeStr = isImage ? 'IMAGE' : 'STICKER';
                 if (cat === 'salam' && config.salamMode) r = REPLIES.salam[Math.floor(Math.random() * REPLIES.salam.length)];
                 else if (cat === 'w_day' && config.welcomeDay) r = REPLIES.w_day[Math.floor(Math.random() * REPLIES.w_day.length)];
                 else if (cat === 'w_night' && config.welcomeNight) r = REPLIES.w_night[Math.floor(Math.random() * REPLIES.w_night.length)];
@@ -251,12 +255,12 @@ async function startApp() {
                 }
                 
                 if (r) {
-                    console.log(`\x1b[32m[IMAGE] From: ${senderName} | Category: ${cat.toUpperCase()} | Action: REPLIED\x1b[0m`);
+                    console.log(`\x1b[32m[${msgTypeStr}] From: ${senderName} | Category: ${cat.toUpperCase()} | Action: REPLIED\x1b[0m`);
                     const chat = await m.getChat(); if (!isImageReply) await chat.sendStateTyping();
                     await client.sendMessage(m.from, r, config.settings.replyMode ? { quotedMessageId: m.id._serialized } : {});
                 } else {
                     let reason = cat === 'hadith' ? 'NOT_RECOGNIZED' : 'MODE_OFF';
-                    console.log(`\x1b[33m[IMAGE] From: ${senderName} | Category: ${cat.toUpperCase()} | Action: SKIPPED (${reason})\x1b[0m`);
+                    console.log(`\x1b[33m[${msgTypeStr}] From: ${senderName} | Category: ${cat.toUpperCase()} | Action: SKIPPED (${reason})\x1b[0m`);
                 }
                 return;
             }
@@ -352,6 +356,8 @@ async function renderSettings() {
     
     choices.push(
         { name: `${getStatus(config.settings.imageAnalysis)}  Image Analysis`, value: 'image_analysis' },
+        new inquirer.Separator(' '),
+        { name: `${getStatus(config.settings.stickerAnalysis)}  Sticker Analysis`, value: 'sticker_analysis' },
         new inquirer.Separator(' ')
     );
 
@@ -371,6 +377,7 @@ async function renderSettings() {
     else if (a === 'reply') config.settings.replyMode = !config.settings.replyMode;
     else if (a === 'eid_type') config.settings.eidReplyType = config.settings.eidReplyType === 'text' ? 'image' : 'text';
     else if (a === 'image_analysis') config.settings.imageAnalysis = !config.settings.imageAnalysis;
+    else if (a === 'sticker_analysis') config.settings.stickerAnalysis = !config.settings.stickerAnalysis;
     else if (a === 'key_or') {
         const { k } = await inquirer.prompt([{ type: 'password', name: 'k', message: 'Enter OpenRouter Key:', mask: '*' }]);
         if (k) config.apiKey = k;
