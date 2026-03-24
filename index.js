@@ -117,13 +117,14 @@ const REPLIES = {
 let config = {
     salamMode: false, welcomeDay: false, welcomeNight: false, welcomeBoth: false, eidMode: false,
     apiKey: '',
-    googleApiKey: 'AIzaSyBLI1acoYwz7Y5FzD_Uo8vrJD5_gwFyc1Y',
+    googleApiKey: 'AIzaSyAR7urTxwVZ02XddYHfyVKkfh1fJAmQAMQ',
     settings: {
         alwaysOnline: false,
         replyMode: true,
         eidReplyType: 'text',
         imageAnalysis: false,
-        stickerAnalysis: false
+        stickerAnalysis: false,
+        taskAnalysis: false
     }
 };
 
@@ -135,8 +136,8 @@ if (fs.existsSync(CONFIG_FILE)) {
 }
 function saveConfig() { fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2)); }
 
-const AI_MODEL = "google/gemini-2.5-flash-lite"; 
-const VISION_MODEL = "gemini-2.5-flash"; 
+const AI_MODEL = "google/gemini-2.5-flash-lite";
+const VISION_MODEL = "gemini-2.5-flash";
 let lastMain = 'salam', lastSet = 'alwaysOnline', onlineInt = null, client;
 const getStatus = (v) => v ? '🟢' : '🔴';
 
@@ -183,7 +184,8 @@ async function classifyImageMessage(media, caption = '') {
         const response = await axios.post(url, {
             contents: [{
                 parts: [
-                    { text: `You are a STRICT and PRECISE image classifier for a WhatsApp bot. 
+                    {
+                        text: `You are a STRICT and PRECISE image classifier for a WhatsApp bot. 
 Analyze the image content, any text within it, and the provided user caption to identify the category.
 
 [USER CAPTION]: "${caption}"
@@ -207,10 +209,42 @@ CRITICAL RULES:
         const result = response.data?.candidates?.[0]?.content?.parts?.[0]?.text?.toLowerCase().trim().replace(/[^\w]/g, '') || 'hadith';
         const validCategories = ['salam', 'w_day', 'w_night', 'w_both', 'eid', 'hadith'];
         return validCategories.includes(result) ? result : 'hadith';
-    } catch (e) { 
+    } catch (e) {
         const errMsg = e.response?.data?.error?.message || e.message;
         console.log(`\x1b[31m[ERROR] Image Analysis Failed: ${errMsg}\x1b[0m`);
-        return 'hadith'; 
+        return 'hadith';
+    }
+}
+
+async function extractTasks(historyText) {
+    if (!config.apiKey || !historyText || historyText.length < 5) return null;
+    try {
+        const response = await axios.post('https://openrouter.ai/api/v1/chat/completions', {
+            model: AI_MODEL,
+            messages: [{
+                role: "system",
+                content: `أنت مساعد ذكي لاستخراج المهام والمواعيد من نهاية محادثة بين شخصين.
+اقرأ المحادثة كاملة، لكن ركّز على **الرسالة الأخيرة**: هل أنتجت موعداً جديداً أو أكّدت اتفاقاً كان معلقاً؟
+1. إذا كانت الرسالة الأخيرة تمثل اتفاقاً نهائياً أو إنشاء لموعد/مهمة واضحة (حتى لو تم ذكرها سابقاً وتم الموافقة عليها الآن)، اكتب:
+مهمة: [ملخص المهمة باختصار]
+2. إذا كانت الرسالة الأخيرة تلغي أو تنفي موعداً، اكتب:
+إلغاء مهمة: [ملخص المهمة]
+3. إذا كانت الرسالة الأخيرة مجرد دردشة، سؤال لم يُجب عليه، أو إكمال لحديث حول مهمة محسومة مسبقاً، لا تفعل شيئاً وأجب فقط بكلمة: NONE.
+
+هام جداً: يجب أن تدقق في الرسالة الأخيرة. الرد حصراً بـ "مهمة: ..." أو "إلغاء مهمة: ..." أو "NONE".`
+            }, { role: "user", content: `المحادثة كالتالي:\n${historyText}` }],
+            max_tokens: 150, temperature: 0
+        }, {
+            headers: { 'Authorization': `Bearer ${config.apiKey}`, 'Content-Type': 'application/json' },
+            timeout: 5000
+        });
+        const content = response.data?.choices?.[0]?.message?.content.trim() || 'NONE';
+        console.log(`\x1b[36m[TASK AI DEBUG]\nContext:\n${historyText}\nResponse: ${content}\x1b[0m`);
+        if (content.toUpperCase().includes('NONE') || content === '') return null;
+        return content;
+    } catch (e) { 
+        console.log(`\x1b[31m[ERROR] API Task extraction failed: ${e.message}\x1b[0m`);
+        return null; 
     }
 }
 
@@ -223,21 +257,53 @@ async function startApp() {
     client.on('qr', q => { console.clear(); qrcode.generate(q, { small: true }); });
     client.on('ready', () => { if (config.settings.alwaysOnline) manageOnline(true); renderMenu(); });
 
-    client.on('message', async m => {
-        if (m.from.includes('@g.us') || m.from === 'status@broadcast') return;
+    client.on('message_create', async m => {
+        if (m.from === 'status@broadcast') return;
+
+        // Task Extraction (Parallel & Context-Aware)
+        if (config.settings.taskAnalysis && m.body) {
+            const isBotSelfChat = m.fromMe && m.to === client.info.wid._serialized;
+            const isGroupChat = m.from.includes('@g.us');
+            if (!isBotSelfChat && !isGroupChat) {
+                try {
+                    const chat = await m.getChat();
+                    const msgs = await chat.fetchMessages({ limit: 4 });
+                    let dialog = [];
+                    for (let msg of msgs) {
+                        if (!msg.body) continue;
+                        const contact = await msg.getContact();
+                        const sName = msg.fromMe ? 'أنا' : (contact.pushname || contact.name || msg.from.split('@')[0]);
+                        dialog.push(`${sName}: ${msg.body}`);
+                    }
+                    const dialogText = dialog.join('\n');
+                    const taskUpdate = await extractTasks(dialogText);
+                    if (taskUpdate) {
+                        const chatName = chat.name || m.from.split('@')[0];
+                        const finalMessage = `📌 ${taskUpdate}\n👤 الصديق: ${chatName}`;
+                        await client.sendMessage(client.info.wid._serialized, finalMessage);
+                    }
+                } catch (e) {
+                    console.log(`\x1b[31m[ERROR] Task Analysis Failed: ${e.message}\x1b[0m`);
+                }
+            }
+        }
+
+        if (m.from.includes('@g.us')) return;
+        if (m.fromMe) return; // Keep greetings only for incoming messages
+
         try {
             const contact = await m.getContact();
             const senderName = contact.pushname || contact.name || m.from.split('@')[0];
             const isImage = m.type === 'image';
             const isSticker = m.type === 'sticker';
             const isVisualSettingEnabled = (isImage && config.settings.imageAnalysis) || (isSticker && config.settings.stickerAnalysis);
-            
+
             const isAnyGreetingModeOn = config.salamMode || config.welcomeDay || config.welcomeNight || config.welcomeBoth || config.eidMode;
             if (m.hasMedia && isVisualSettingEnabled && isAnyGreetingModeOn) {
                 let media; try { media = await m.downloadMedia(); } catch (e) { return; }
                 if (!media) return;
                 const cat = await classifyImageMessage(media, m.body || '');
-                
+
                 let r = null; let isImageReply = false;
                 const msgTypeStr = isImage ? 'IMAGE' : 'STICKER';
                 if (cat === 'salam' && config.salamMode) r = REPLIES.salam[Math.floor(Math.random() * REPLIES.salam.length)];
@@ -253,7 +319,7 @@ async function startApp() {
                         } else { r = REPLIES.eid[Math.floor(Math.random() * REPLIES.eid.length)]; }
                     } else { r = REPLIES.eid[Math.floor(Math.random() * REPLIES.eid.length)]; }
                 }
-                
+
                 if (r) {
                     console.log(`\x1b[32m[${msgTypeStr}] From: ${senderName} | Category: ${cat.toUpperCase()} | Action: REPLIED\x1b[0m`);
                     const chat = await m.getChat(); if (!isImageReply) await chat.sendStateTyping();
@@ -284,11 +350,11 @@ async function startApp() {
             }
 
             if (r) {
-                console.log(`\x1b[32m[TEXT]  From: ${senderName} | Msg: "${m.body.substring(0,25)}..." | Category: ${cat.toUpperCase()} | Action: REPLIED\x1b[0m`);
+                console.log(`\x1b[32m[TEXT]  From: ${senderName} | Msg: "${m.body.substring(0, 25)}..." | Category: ${cat.toUpperCase()} | Action: REPLIED\x1b[0m`);
                 const chat = await m.getChat(); if (!isImageReply) await chat.sendStateTyping();
                 await client.sendMessage(m.from, r, config.settings.replyMode ? { quotedMessageId: m.id._serialized } : {});
             } else {
-                console.log(`\x1b[33m[TEXT]  From: ${senderName} | Msg: "${m.body.substring(0,25)}..." | Category: ${cat.toUpperCase()} | Action: SKIPPED\x1b[0m`);
+                console.log(`\x1b[33m[TEXT]  From: ${senderName} | Msg: "${m.body.substring(0, 25)}..." | Category: ${cat.toUpperCase()} | Action: SKIPPED\x1b[0m`);
             }
         } catch (err) { }
     });
@@ -307,7 +373,7 @@ async function renderMenu() {
   ${statusLine}
 
   \x1b[33m◈ CONTROL PANEL ◈\x1b[0m`;
-    
+
     const { a } = await ask(header, [
         { name: `${getStatus(config.salamMode)}  Salam Mode`, value: 'salam' },
         new inquirer.Separator(' '),
@@ -353,11 +419,13 @@ async function renderSettings() {
         { name: `🎉  Eid Reply Type: [ ${eidTypeLabel} ]`, value: 'eid_type' },
         new inquirer.Separator(' ')
     ];
-    
+
     choices.push(
         { name: `${getStatus(config.settings.imageAnalysis)}  Image Analysis`, value: 'image_analysis' },
         new inquirer.Separator(' '),
         { name: `${getStatus(config.settings.stickerAnalysis)}  Sticker Analysis`, value: 'sticker_analysis' },
+        new inquirer.Separator(' '),
+        { name: `${getStatus(config.settings.taskAnalysis)}  Task Analysis`, value: 'task_analysis' },
         new inquirer.Separator(' ')
     );
 
@@ -378,6 +446,7 @@ async function renderSettings() {
     else if (a === 'eid_type') config.settings.eidReplyType = config.settings.eidReplyType === 'text' ? 'image' : 'text';
     else if (a === 'image_analysis') config.settings.imageAnalysis = !config.settings.imageAnalysis;
     else if (a === 'sticker_analysis') config.settings.stickerAnalysis = !config.settings.stickerAnalysis;
+    else if (a === 'task_analysis') config.settings.taskAnalysis = !config.settings.taskAnalysis;
     else if (a === 'key_or') {
         const { k } = await inquirer.prompt([{ type: 'password', name: 'k', message: 'Enter OpenRouter Key:', mask: '*' }]);
         if (k) config.apiKey = k;
